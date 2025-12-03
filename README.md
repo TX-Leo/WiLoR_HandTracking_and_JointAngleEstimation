@@ -9,3 +9,7 @@ pip install -r requirements.txt
 ```
 bash run_wilor.sh
 ```
+The results are in ```./test_data/wilor_output/```
+
+# One Example
+![door opening](./test_data/test_video_viz_all_info.gif)
