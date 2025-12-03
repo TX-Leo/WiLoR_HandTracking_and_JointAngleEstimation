@@ -1,0 +1,1 @@
+python wilor.py --video_path "./test_data/test_video.mp4" --save_path "./test_data/wilor_output/"
