@@ -10,6 +10,8 @@ pip install -r requirements.txt
 bash run_wilor.sh
 ```
 The results are in ```./test_data/wilor_output/```
+
 You could check ```./doc``` about the order of hand keypoints and the definition of joint angle 
+
 # One Example
-![door opening](test_data/test_video_viz_all_info.gif)
+![door opening](https://github.com/user-attachments/assets/52863c42-d025-4550-b4ff-1a36a93d55c3)
