@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time    : 2024/10/14
-# @Author  : wenshao
-# @Project : WiLoR-mini
-# @FileName: wilor_hand_pose3d_estimation_pipeline.py
+# @Time    : 2025/12/03
+# @Author  : Leo
+# @Project : WiLoR
+# @FileName: __init__.py.py
 import pdb
 from skimage.filters import gaussian
 import torch
@@ -92,23 +92,18 @@ class WiLorHandPose3dEstimationPipeline:
 
         ########## after: output with confidence ########## 
         for det in detections:
-            # YOLO 输出格式通常为 [x1, y1, x2, y2, conf, cls]
+            # YOLO output: [x1, y1, x2, y2, conf, cls]
             hand_bbox = det.boxes.data.cpu().detach().squeeze().numpy()
             is_rights.append(det.boxes.cls.cpu().detach().squeeze().item())
-            
-            # 1. 提取坐标
             bboxes.append(hand_bbox[:4].tolist())
-            
-            # 2. 提取置信度 (第5个元素，索引为4)
+            # get confidence
             conf_score = 1.0
             if hand_bbox.size >= 5:
                 conf_score = float(hand_bbox[4])
-            
-            # 3. 将 'score' 加入返回结果
             detect_rets.append({
                 "hand_bbox": bboxes[-1], 
                 "is_right": is_rights[-1],
-                "score": conf_score  # <--- 新增这一行
+                "score": conf_score 
             })
 
         if len(bboxes) == 0:

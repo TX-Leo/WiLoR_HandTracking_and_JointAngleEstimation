@@ -2,25 +2,25 @@
 """
 wilor_v2.py
 
-本脚本实现了对视频进行手部姿态估计的完整流程，使用了 WiLoR 模型。
+This script implements the complete pipeline for hand pose estimation on videos using the WiLoR model.
 
-【版本更新 v3】
-1. 修复 Pose 可视化：改用基于3D关键点的几何法构建坐标轴，解决轴向错误问题。
-2. 优化 Dashboard：左右两侧固定面板，分别显示左手/右手状态 (Missing/Detected)。
-3. 增加 Abduction 可视化：仪表盘现在同时显示弯曲(Flexion)和外展(Abduction)。
+[Version Update v3]
+1. Fix Pose Visualization: Switched to a geometric method based on 3D keypoints to construct coordinate axes, solving the axis direction error.
+2. Optimize Dashboard: Fixed panels on the left and right sides, displaying Left/Right hand status (Missing/Detected) respectively.
+3. Add Abduction Visualization: The dashboard now displays both Flexion and Abduction.
 
-主要功能包括：
-1. 使用 WiLoR 模型对视频的每一帧进行3D手部姿态和形状的估计。
-2. 将估计出的3D手部模型渲染回2D图像。
-3. 提取并保存 Joint Angles (emg2pose定义) 和 Confidence。
-4. 生成包含丰富信息的数据仪表盘视频。
+Main functions include:
+1. Estimate 3D hand pose and shape for each frame of the video using the WiLoR model.
+2. Render the estimated 3D hand model back onto the 2D image.
+3. Extract and save Joint Angles (emg2pose definition) and Confidence.
+4. Generate dashboard videos containing rich information.
 """
 
 import os
 
 # ==============================================================================
-# 【环境配置】解决 Pyrender 在无头服务器上的渲染问题
-# 必须在 import pyrender 之前设置
+# [Environment Configuration] Solve Pyrender rendering issues on headless servers
+# Must be set before importing pyrender
 os.environ['PYOPENGL_PLATFORM'] = 'egl'
 # ==============================================================================
 
@@ -39,23 +39,23 @@ from utils import utils
 
 from pipelines.wilor_hand_pose3d_estimation_pipeline import WiLorHandPose3dEstimationPipeline
 
-# MANO模型关键点连接顺序 (基于用户提供的映射逻辑)
+# MANO model keypoint connection order (Based on the mapping logic provided by the user)
 MANO_CONNECTIONS = [
-    # 拇指 Thumb (索引 1-4)
+    # Thumb (Index 1-4)
     (0, 1), (1, 2), (2, 3), (3, 4),
-    # 无名指 Ring (索引 5-8) - 注：此处遵循用户提供的索引定义
+    # Ring (Index 5-8) - Note: Follows the index definition provided by the user
     (0, 5), (5, 6), (6, 7), (7, 8),
-    # 中指 Middle (索引 9-12)
+    # Middle (Index 9-12)
     (0, 9), (9, 10), (10, 11), (11, 12),
-    # 食指 Index (索引 13-16)
+    # Index (Index 13-16)
     (0, 13), (13, 14), (14, 15), (15, 16),
-    # 小指 Pinky (索引 17-20)
+    # Pinky (Index 17-20)
     (0, 17), (17, 18), (18, 19), (19, 20),
 ]
 
 class Renderer:
     def __init__(self, faces: np.array):
-        # 补充闭合面片
+        # Complement closed faces
         faces_new = np.array([[92, 38, 234], [234, 38, 239], [38, 122, 239], [239, 122, 279], [122, 118, 279], [279, 118, 215], [118, 117, 215], [215, 117, 214], [117, 119, 214], [214, 119, 121], [119, 120, 121], [121, 120, 78], [120, 108, 78], [78, 108, 79]])
         faces = np.concatenate([faces, faces_new], axis=0)
         self.faces = faces
@@ -140,7 +140,7 @@ class Renderer:
     
 @dataclass
 class WilorHand:
-    """存储单只手的检测结果。"""
+    """Stores detection results for a single hand."""
     is_right: bool = False
     hand_keypoints_2d: np.ndarray = None
     hand_keypoints_3d: np.ndarray = None
@@ -154,7 +154,7 @@ class WilorHand:
 
 @dataclass
 class WilorStruct:
-    """用于存储单帧图像所有检测信息的抽象数据结构。"""
+    """Abstract data structure to store all detection information for a single frame."""
     idx: int
     rgb: np.ndarray
     focal_length: float = None
@@ -168,19 +168,19 @@ class WilorDataset:
         
         self.cap = cv2.VideoCapture(self.video_path)
         if not self.cap.isOpened():
-            raise IOError(f"无法打开视频文件: {self.video_path}")
+            raise IOError(f"Unable to open video file: {self.video_path}")
         
         self.fps = int(self.cap.get(cv2.CAP_PROP_FPS))
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.num_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        print(f"视频加载成功: {self.width}x{self.height} @ {self.fps} FPS, 共 {self.num_frames} 帧。")
+        print(f"Video loaded successfully: {self.width}x{self.height} @ {self.fps} FPS, Total {self.num_frames} frames.")
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.dtype = torch.float16 if self.device.type == 'cuda' else torch.float32
-        print(f"正在加载 WiLoR 模型到 {self.device}...")
+        print(f"Loading WiLoR model to {self.device}...")
         self.pipe = WiLorHandPose3dEstimationPipeline(device=self.device, dtype=self.dtype)
-        print("WiLoR 模型加载完毕。")
+        print("WiLoR model loaded.")
 
         self.renderer = Renderer(self.pipe.wilor_model.mano.faces)
         self.RIGHT_HAND_COLOR = (0.66, 0.27, 0.25)
@@ -192,7 +192,7 @@ class WilorDataset:
         return self.num_frames
 
     def _calculate_emg2pose_angles(self, keypoints_3d: np.ndarray, is_right: bool) -> Dict[str, float]:
-        """计算 emg2pose 论文定义的 20 个关节角度。"""
+        """Calculate the 20 joint angles defined in the emg2pose paper."""
         angles = {}
         def get_angle(v1, v2):
             v1_norm = v1 / (np.linalg.norm(v1) + 1e-6)
@@ -210,7 +210,7 @@ class WilorDataset:
         kpts = keypoints_3d
         v_wrist_middle = kpts[9] - kpts[0] 
         v_wrist_index = kpts[13] - kpts[0]
-        # 注意：法线方向可能随左右手变化，但在计算无符号角度时影响较小，主要影响外展正负
+        # Note: The normal direction might vary between left and right hands, but it has minor impact on unsigned angle calculation (mainly affects abduction sign)
         palm_normal = np.cross(v_wrist_index, v_wrist_middle)
         palm_normal /= (np.linalg.norm(palm_normal) + 1e-6)
         
@@ -254,7 +254,7 @@ class WilorDataset:
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame_bgr = self.cap.read()
         if not ret:
-            raise IndexError(f"无法读取第 {idx} 帧。")
+            raise IndexError(f"Cannot read frame {idx}.")
 
         outputs = self.pipe.predict(frame_bgr)
         wilor_hands = []
@@ -267,7 +267,7 @@ class WilorDataset:
             
             bbox = out['hand_bbox']
             confidence = 1.0
-            # 兼容不同版本的返回结构
+            # Compatible with return structures from different versions
             if isinstance(bbox, (list, np.ndarray)) and len(bbox) >= 5:
                 confidence = float(bbox[4])
                 bbox = bbox[:4]
@@ -301,15 +301,15 @@ class WilorDataset:
         )
         
     def process_and_save_all(self):
-        print("开始处理所有视频帧...")
-        for i in tqdm(range(len(self)), desc="处理视频帧"):
+        print("Starting to process all video frames...")
+        for i in tqdm(range(len(self)), desc="Processing frames"):
             wilor_struct = self[i]
             self.all_wilor_structs.append(wilor_struct)
             self.save_struct_to_json(wilor_struct)
 
-        print("所有帧处理完毕，开始生成可视化视频...")
+        print("All frames processed, starting to generate visualization videos...")
         self.create_visualization_videos()
-        print("所有任务完成！")
+        print("All tasks completed!")
 
     def save_struct_to_json(self, wilor_struct: WilorStruct):
         frame_dir = os.path.join(self.save_path, "all_data", f"{wilor_struct.idx:05d}")
@@ -346,12 +346,12 @@ class WilorDataset:
             
     def create_visualization_videos(self):
         if not self.all_wilor_structs:
-            print("没有已处理的数据，无法创建视频。")
+            print("No processed data available, unable to create videos.")
             return
 
         rendered_hand_frames, rendered_hand_mask_only_frames, palm_and_wrist_pose_frames, hand_keypoints_frames, all_info_frames = [], [], [], [], []
 
-        for s in tqdm(self.all_wilor_structs, desc="生成可视化帧"):
+        for s in tqdm(self.all_wilor_structs, desc="Generating visualization frames"):
             image_rgb_norm = cv2.cvtColor(s.rgb, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
             rendered_hand_mask_only_canvas = np.zeros_like(image_rgb_norm)
             rendered_hand_canvas = image_rgb_norm.copy()
@@ -371,23 +371,23 @@ class WilorDataset:
                 rendered_hand_mask_only_canvas = rendered_hand_mask_only_canvas * (1 - alpha) + rendered_rgba[:, :, :3] * alpha
                 rendered_hand_canvas = rendered_hand_canvas * (1 - alpha) + rendered_rgba[:, :, :3] * alpha
 
-            # 基础渲染帧
+            # Basic rendered frame
             base_rendered = cv2.cvtColor((rendered_hand_canvas * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
             rendered_hand_frames.append(base_rendered)
             rendered_hand_mask_only_frames.append(cv2.cvtColor((rendered_hand_mask_only_canvas * 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
             
-            # Pose 帧
+            # Pose frame
             pose_frame = self.draw_palm_and_wrist_pose(s.rgb.copy(), s.hands, s.focal_length, self.width, self.height)
             palm_and_wrist_pose_frames.append(pose_frame)
             
-            # Keypoints 帧
+            # Keypoints frame
             kpt_frame = self._draw_hand_keypoints(s.rgb.copy(), s.hands)
             hand_keypoints_frames.append(kpt_frame)
             
-            # All Info 帧 (包含 Pose, Kpts, Mesh, Dashboard)
+            # All Info frame (Includes Pose, Kpts, Mesh, Dashboard)
             img_step1 = self.draw_palm_and_wrist_pose(base_rendered.copy(), s.hands, s.focal_length, self.width, self.height)
             img_step2 = self._draw_hand_keypoints(img_step1, s.hands)
-            # 【新功能】绘制固定布局的左右手 Dashboard
+            # [New Feature] Draw fixed layout Dashboard for Left/Right hands
             img_final = self._draw_angle_dashboard_fixed_layout(img_step2, s.hands)
             
             all_info_frames.append(img_final)
@@ -398,11 +398,11 @@ class WilorDataset:
         utils.create_video_from_frames(hand_keypoints_frames, os.path.join(self.save_path, f"viz_hand_keypoints.mp4"), self.fps)
         utils.create_video_from_frames(all_info_frames, os.path.join(self.save_path, f"viz_all_info.mp4"), self.fps)
 
-    # --- 【重构】固定布局的 Dashboard ---
+    # --- [Refactor] Fixed Layout Dashboard ---
     def _draw_angle_dashboard_fixed_layout(self, image: np.ndarray, hands: List[WilorHand]) -> np.ndarray:
         """
-        绘制左右两个固定的面板，分别显示左右手的 Flexion 和 Abduction 状态。
-        如果没有检测到手，面板依然存在但显示"Not Detected"。
+        Draw two fixed panels on the left and right, displaying the Flexion and Abduction status of the left and right hands respectively.
+        If no hand is detected, the panel remains but displays "Not Detected".
         """
         h, w = image.shape[:2]
         overlay = image.copy()
@@ -411,91 +411,91 @@ class WilorDataset:
         panel_h = 240
         margin = 15
         
-        # 定义左右面板的位置
+        # Define positions for left and right panels
         # Left Panel (for Left Hand)
         left_panel_rect = (margin, h - panel_h - margin, margin + panel_w, h - margin)
         # Right Panel (for Right Hand)
         right_panel_rect = (w - panel_w - margin, h - panel_h - margin, w - margin, h - margin)
         
-        # 查找当前帧中的左手和右手数据
+        # Find Left and Right hand data in the current frame
         left_hand_data = next((h for h in hands if not h.is_right), None)
         right_hand_data = next((h for h in hands if h.is_right), None)
         
-        # 绘制面板背景
+        # Draw panel background
         cv2.rectangle(overlay, (left_panel_rect[0], left_panel_rect[1]), (left_panel_rect[2], left_panel_rect[3]), (0, 0, 0), -1)
         cv2.rectangle(overlay, (right_panel_rect[0], right_panel_rect[1]), (right_panel_rect[2], right_panel_rect[3]), (0, 0, 0), -1)
         
         alpha = 0.6
         cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0, image)
         
-        # 辅助绘制函数
+        # Helper drawing function
         def draw_panel_content(start_x, start_y, hand: Optional[WilorHand], title_prefix):
-            # 标题
+            # Title
             cv2.putText(image, f"{title_prefix} Hand", (start_x + 10, start_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
             if hand is None:
-                # 没检测到手，显示灰色提示
+                # Hand not detected, show grey text prompt
                 cv2.putText(image, "Not Detected", (start_x + 10, start_y + 120), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (100, 100, 100), 2)
                 return
 
-            # 显示置信度
+            # Display confidence
             cv2.putText(image, f"Conf: {hand.confidence:.2f}", (start_x + 140, start_y + 25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
             fingers = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
             bar_start_y = start_y + 50
-            row_h = 35 # 每行高度增加，因为要画两条条
+            row_h = 35 # Increase row height because we draw two bars
             
             for i, finger in enumerate(fingers):
                 y = bar_start_y + i * row_h
                 
-                # 1. 提取 Flexion (平均值)
+                # 1. Extract Flexion (Mean)
                 flex_keys = [k for k in hand.joint_angles.keys() if finger in k and "Flexion" in k]
                 avg_flex = np.mean([hand.joint_angles[k] for k in flex_keys]) if flex_keys else 0
                 
-                # 2. 提取 Abduction (平均值, 对于中指可能是0)
+                # 2. Extract Abduction (Mean, might be 0 for Middle)
                 abd_keys = [k for k in hand.joint_angles.keys() if finger in k and "Abduction" in k]
                 avg_abd = np.mean([hand.joint_angles[k] for k in abd_keys]) if abd_keys else 0
                 
-                # 绘制文字
+                # Draw text
                 cv2.putText(image, f"{finger[:3]}", (start_x + 10, y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
                 
-                # 绘制 Flexion 条 (蓝色, 上半部分)
-                # 范围假设 0-100度
+                # Draw Flexion bar (Blue, upper part)
+                # Assume range 0-100 degrees
                 flex_ratio = min(max(avg_flex / 100.0, 0), 1.0)
                 bar_len_f = int(flex_ratio * (panel_w - 70))
                 cv2.rectangle(image, (start_x + 55, y + 5), (start_x + 55 + bar_len_f, y + 15), (255, 150, 50), -1) # Blue-ish (BGR)
                 
-                # 绘制 Abduction 条 (黄色, 下半部分, 较细)
-                # 范围假设 0-40度
+                # Draw Abduction bar (Yellow, lower part, thinner)
+                # Assume range 0-40 degrees
                 abd_ratio = min(max(avg_abd / 40.0, 0), 1.0)
                 bar_len_a = int(abd_ratio * (panel_w - 70))
                 cv2.rectangle(image, (start_x + 55, y + 18), (start_x + 55 + bar_len_a, y + 24), (50, 200, 255), -1) # Yellow (BGR)
                 
-                # 数字显示 (只显示Flexion方便阅读，或者全部显示)
+                # Numeric display (Only show Flexion for readability, or show both)
                 # F: Flexion, A: Abduction
                 # cv2.putText(image, f"{int(avg_flex)}", (start_x + panel_w - 30, y + 15), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
 
-            # 图例
+            # Legend
             legend_y = start_y + panel_h - 15
             cv2.rectangle(image, (start_x + 10, legend_y), (start_x + 20, legend_y+10), (255, 150, 50), -1)
             cv2.putText(image, "Flex", (start_x + 25, legend_y+8), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
             cv2.rectangle(image, (start_x + 70, legend_y), (start_x + 80, legend_y+10), (50, 200, 255), -1)
             cv2.putText(image, "Abd", (start_x + 85, legend_y+8), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1)
 
-        # 绘制左边面板
+        # Draw left panel
         draw_panel_content(left_panel_rect[0], left_panel_rect[1], left_hand_data, "Left")
-        # 绘制右边面板
+        # Draw right panel
         draw_panel_content(right_panel_rect[0], right_panel_rect[1], right_hand_data, "Right")
 
         return image
 
-    # --- 【重构】基于几何关键点的 Pose 可视化 ---
+    # --- [Refactor] Geometric Keypoint-based Pose Visualization ---
     def draw_palm_and_wrist_pose(self, image: np.ndarray, hands: List[WilorHand], focal_length, width, height):
         """
-        使用 3D 关键点直接构建手掌局部坐标系，避免因 Global Orient 定义差异导致的坐标轴歪斜。
-        X轴: 红色 (Thumb/Index direction)
-        Y轴: 绿色 (Middle finger direction)
-        Z轴: 蓝色 (Palm Normal, out of palm)
+        Construct the palm local coordinate system directly using 3D keypoints to avoid skewed axes caused by differences in Global Orient definitions.
+        X-axis: Red (Thumb/Index direction)
+        Y-axis: Green (Middle finger direction)
+        Z-axis: Blue (Palm Normal, out of palm)
         """
         if focal_length is None or not hands:
             return image
@@ -503,51 +503,51 @@ class WilorDataset:
         camera_matrix = np.array([[focal_length, 0, width / 2], [0, focal_length, height / 2], [0, 0, 1]], dtype=np.float64)
         dist_coeffs = np.zeros((4, 1))
 
-        # 这里的 R_correction 用来修正 WiLoR 相机坐标系(Y-up) 到 OpenCV (Y-down) 的差异
-        # 仅用于平移向量的投影修正，旋转矩阵我们将自己构建，所以不需要在这个矩阵里旋转
+        # This R_correction is used to correct the difference between WiLoR Camera Frame (Y-up) and OpenCV (Y-down)
+        # It is only used for projection correction of translation vectors. Since we construct the rotation matrix ourselves, we don't need to rotate inside this matrix.
         R_correction = np.array([[1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype=np.float64)
 
-        axis_len = 0.08 # 8cm 长
+        axis_len = 0.08 # 8cm length
 
         for hand in hands:
             kpts = hand.hand_keypoints_3d # (21, 3)
             
-            # --- 1. 使用几何法构建局部坐标系 ---
-            # 原点：手腕 (Index 0)
+            # --- 1. Construct Local Coordinate System using Geometric Method ---
+            # Origin: Wrist (Index 0)
             origin = kpts[0]
             
-            # Y轴向量：手腕 -> 中指指根 (Index 9) [纵向]
+            # Y-axis vector: Wrist -> Middle finger proximal (Index 9) [Longitudinal]
             vec_y = kpts[9] - kpts[0]
             vec_y = vec_y / (np.linalg.norm(vec_y) + 1e-6)
             
-            # 辅助向量：手腕 -> 食指指根 (Index 13)
+            # Auxiliary vector: Wrist -> Index finger proximal (Index 13)
             vec_index = kpts[13] - kpts[0]
             
-            # Z轴向量 (法线)：Cross(Index, Middle) -> 垂直于手掌平面
-            # 注意：左右手叉乘方向可能相反，这里统一处理，如果发现Z轴反了可以加判断
+            # Z-axis vector (Normal): Cross(Index, Middle) -> Perpendicular to palm plane
+            # Note: Cross product direction might be opposite for left/right hands. Handled uniformly here; add check if Z-axis is reversed.
             if hand.is_right:
-                vec_z = np.cross(vec_index, vec_y) # 右手定则
+                vec_z = np.cross(vec_index, vec_y) # Right-hand rule
             else:
-                vec_z = np.cross(vec_y, vec_index) # 左手反过来
+                vec_z = np.cross(vec_y, vec_index) # Left-hand reversed
             vec_z = vec_z / (np.linalg.norm(vec_z) + 1e-6)
             
-            # X轴向量：Cross(Y, Z) -> 确保正交
+            # X-axis vector: Cross(Y, Z) -> Ensure orthogonality
             vec_x = np.cross(vec_y, vec_z)
             vec_x = vec_x / (np.linalg.norm(vec_x) + 1e-6)
             
-            # 构建旋转矩阵 (列向量)
+            # Construct Rotation Matrix (Column vectors)
             # R_palm = [x, y, z]
             R_palm = np.column_stack((vec_x, vec_y, vec_z))
             
-            # 转换为旋转向量供 OpenCV 使用
+            # Convert to Rotation Vector for OpenCV
             r_vec, _ = cv2.Rodrigues(R_palm)
             
-            # --- 2. 坐标系转换 (WiLoR Cam -> OpenCV Cam) ---
-            # WiLoR 输出的 kpts 已经是 Camera Frame 下的坐标
-            # 但是 OpenCV 的 Y轴和Z轴与 WiLoR (OpenGL风格) 是反的
-            # 我们需要把 3D 点本身转到 OpenCV 坐标系下再投影
+            # --- 2. Coordinate System Transformation (WiLoR Cam -> OpenCV Cam) ---
+            # The output kpts from WiLoR are already in Camera Frame coordinates.
+            # However, OpenCV's Y-axis and Z-axis are opposite to WiLoR (OpenGL style).
+            # We need to transform the 3D points themselves to the OpenCV coordinate system before projection.
             
-            # 定义 3D 轴的端点 (在手掌局部空间)
+            # Define endpoints of 3D axes (in Palm Local Space)
             # Origin, X-end, Y-end, Z-end
             local_points = np.float32([
                 [0, 0, 0],
@@ -556,31 +556,31 @@ class WilorDataset:
                 [0, 0, axis_len]
             ])
             
-            # 将局部点变换到全局 Camera 空间 (WiLoR空间)
+            # Transform local points to Global Camera Space (WiLoR Space)
             # P_global = R_palm @ P_local + Origin
-            # 注意：local_points 是行向量，所以是 P_local @ R_palm.T + Origin
+            # Note: local_points are row vectors, so it is P_local @ R_palm.T + Origin
             world_points_wilor = (local_points @ R_palm.T) + origin
             
-            # 将 WiLoR 空间点转为 OpenCV 空间点 (Y, Z 取反)
+            # Transform WiLoR Space points to OpenCV Space points (Invert Y, Z)
             world_points_opencv = world_points_wilor.copy()
             world_points_opencv[:, 1] *= -1
             world_points_opencv[:, 2] *= -1
             
-            # --- 3. 投影绘制 ---
-            # 因为我们已经手动转换了点，这里 r_vec 和 t_vec 设为 0 (Identity)
+            # --- 3. Projection and Drawing ---
+            # Since we manually transformed the points, set r_vec and t_vec to 0 (Identity)
             imgpts, _ = cv2.projectPoints(world_points_opencv, np.zeros(3), np.zeros(3), camera_matrix, dist_coeffs)
             imgpts = imgpts.astype(int).reshape(-1, 2)
             
-            # 绘制
+            # Draw
             origin_pt = tuple(imgpts[0])
-            cv2.line(image, origin_pt, tuple(imgpts[1]), (0, 0, 255), 3) # X - Red (横向/拇指侧)
-            cv2.line(image, origin_pt, tuple(imgpts[2]), (0, 255, 0), 3) # Y - Green (纵向/中指)
-            cv2.line(image, origin_pt, tuple(imgpts[3]), (255, 0, 0), 3) # Z - Blue (法线)
+            cv2.line(image, origin_pt, tuple(imgpts[1]), (0, 0, 255), 3) # X - Red (Lateral/Thumb side)
+            cv2.line(image, origin_pt, tuple(imgpts[2]), (0, 255, 0), 3) # Y - Green (Longitudinal/Middle)
+            cv2.line(image, origin_pt, tuple(imgpts[3]), (255, 0, 0), 3) # Z - Blue (Normal)
             
         return image
     
     def _draw_hand_keypoints(self, image: np.ndarray, hands: List[WilorHand]) -> np.ndarray:
-        """在单帧图像上绘制手部骨架（关键点和连接线）。"""
+        """Draw hand skeleton (keypoints and connection lines) on a single frame."""
         for hand in hands:
             kpts_2d = hand.hand_keypoints_2d.astype(int)
             for p1_idx, p2_idx in MANO_CONNECTIONS:
@@ -588,9 +588,9 @@ class WilorDataset:
                 p2 = tuple(kpts_2d[p2_idx])
                 cv2.line(image, p1, p2, (255, 255, 255), 2)
             
-            # 颜色映射
+            # Color Mapping
             # 0: Wrist(White), 1-4: Thumb(Black), 5-8: Ring(Red), 9-12: Middle(Green), 13-16: Index(Blue), 17-20: Pinky(Grey)
-            # 注意：此处遵循用户提供的 connection 索引逻辑
+            # Note: Follows the connection index logic provided by the user
             finger_colors = [(0, 0, 0), (255, 0, 0), (0, 255, 0), (0, 0, 255), (177, 177, 177)]
             joint_to_finger_map = [-1, 0,0,0,0, 1,1,1,1, 2,2,2,2, 3,3,3,3, 4,4,4,4] # Index mapping based on user provided MANO_CONNECTIONS
 
@@ -604,12 +604,12 @@ class WilorDataset:
         self.cap.release()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="使用 WiLoR 模型处理视频并进行3D手部姿态估计。")
-    parser.add_argument("--video_path", type=str, required=True, help="输入视频文件的路径。")
-    parser.add_argument("--save_path", type=str, required=True, help="保存结果的目录路径。")
+    parser = argparse.ArgumentParser(description="Process video using WiLoR model for 3D hand pose estimation.")
+    parser.add_argument("--video_path", type=str, required=True, help="Path to the input video file.")
+    parser.add_argument("--save_path", type=str, required=True, help="Directory path to save the results.")
     args = parser.parse_args()
 
     wilor_processor = WilorDataset(video_path=args.video_path, save_path=args.save_path)
     wilor_processor.process_and_save_all()
     wilor_processor.release()
-    # xvfb-run -a python wilor.py --video_path "./data/mps_open_door_4_vrs/aria/video_original.mp4" --save_path "./data/mps_open_door_4_vrs/wilor/"
+    # xvfb-run -a python wilor.py --video_path "./test_data/test_video.mp4" --save_path "./test_data/wilor_output/"
