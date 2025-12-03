@@ -1,14 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-wilor_v2.py
-
-This script implements the complete pipeline for hand pose estimation on videos using the WiLoR model.
-
-[Version Update v3]
-1. Fix Pose Visualization: Switched to a geometric method based on 3D keypoints to construct coordinate axes, solving the axis direction error.
-2. Optimize Dashboard: Fixed panels on the left and right sides, displaying Left/Right hand status (Missing/Detected) respectively.
-3. Add Abduction Visualization: The dashboard now displays both Flexion and Abduction.
-
 Main functions include:
 1. Estimate 3D hand pose and shape for each frame of the video using the WiLoR model.
 2. Render the estimated 3D hand model back onto the 2D image.
