@@ -10,4 +10,4 @@ opencv-python
 huggingface_hub
 scikit-image
 roma
-chumpy @ git+https://github.com/mattloper/chumpy
+chumpy
