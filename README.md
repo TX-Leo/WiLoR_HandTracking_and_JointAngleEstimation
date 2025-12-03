@@ -1,3 +1,4 @@
+# WiLoR_HandTracking_and_JointAngleEstimation
 This is a plug-and-play python3 module, which can do hand tracking and joint angle estimation given a RGB video.
 
 # Setup
